@@ -11,24 +11,25 @@
         .connecting { background: #fef3c7; color: #d97706; }
         .connected { background: #dcfce7; color: #15803d; }
         .error { background: #fee2e2; color: #b91c1c; }
-        .upload-area { border: 2px dashed #cbd5e1; padding: 25px; border-radius: 8px; cursor: pointer; background: #f8fafc; }
+        .upload-area { border: 2px dashed #cbd5e1; padding: 25px; border-radius: 8px; cursor: pointer; background: #f8fafc; min-height: 100px; display: flex; flex-direction: column; align-items: center; justify-content: center; }
         #imageInput { display: none; }
         #preview { max-width: 100%; max-height: 200px; margin-top: 15px; border-radius: 6px; display: none; }
         button { background: #007bff; color: white; border: none; padding: 12px; border-radius: 6px; cursor: pointer; width: 100%; font-weight: bold; margin-top: 15px; }
         button:disabled { background: #cbd5e1; cursor: not-allowed; }
-        #result { margin-top: 20px; padding: 12px; background: #f1f5f9; border-radius: 6px; font-family: monospace; white-space: pre-wrap; text-align: left; }
+        #result { margin-top: 20px; padding: 12px; background: #f1f5f9; border-radius: 6px; font-family: monospace; white-space: pre-wrap; text-align: left; max-height: 200px; overflow-y: auto; }
     </style>
 
-    <!-- Подключаем JS-клиент Gradio напрямую в браузер -->
+    <!-- Подключаем JS-клиент Gradio -->
     <script type="module">
         import { Client, handle_file } from "https://jsdelivr.net";
 
-        // Проверьте, совпадает ли эта ссылка с запущенной в данный момент в Python ноутбуке
+        // Проверьте, активна ли ещё эта ссылка в вашем Python-терминале/блокноте!
         const GRADIO_URL = "https://gradio.live"; 
         let client;
 
         async function init() {
             const statusDiv = document.getElementById('status');
+            const resultDiv = document.getElementById('result');
             try {
                 client = await Client.connect(GRADIO_URL);
                 statusDiv.innerText = "Статус: Подключено к API";
@@ -36,8 +37,9 @@
                 document.getElementById('submitBtn').disabled = false;
             } catch (e) {
                 console.error(e);
-                statusDiv.innerText = "Ошибка: ссылка API истекла";
+                statusDiv.innerText = "Ошибка подключения!";
                 statusDiv.className = "status error";
+                resultDiv.innerText = "Критическая ошибка инициализации: " + e.message + "\nВозможно, ссылка .gradio.live устарела или закрыта в Python.";
             }
         }
 
@@ -45,8 +47,8 @@
             const fileInput = document.getElementById('imageInput');
             const resultDiv = document.getElementById('result');
             
-            if (fileInput.files.length === 0) {
-                alert("Выберите изображение!");
+            if (!fileInput.files || fileInput.files.length === 0) {
+                alert("Сначала выберите изображение!");
                 return;
             }
 
@@ -54,7 +56,8 @@
             document.getElementById('submitBtn').disabled = true;
 
             try {
-                const imageFile = handle_file(fileInput.files);
+                // ИСПРАВЛЕНО: Передаем конкретный первый файл, а не весь список файлов
+                const imageFile = handle_file(fileInput.files[0]);
 
                 const result = await client.predict("/predict", {
                     img: imageFile,
@@ -63,34 +66,35 @@
                 resultDiv.innerText = "Ответ модели:\n" + JSON.stringify(result.data, null, 2);
             } catch (error) {
                 console.error(error);
-                resultDiv.innerText = "❌ Ошибка при вызове API. Проверьте консоль (F12).";
+                resultDiv.innerText = "❌ Ошибка при вызове API:\n" + error.message;
             } finally {
                 document.getElementById('submitBtn').disabled = false;
             }
         }
 
-        window.addEventListener('DOMContentLoaded', () => {
+        // Настройка событий вынесена отдельно для стабильности
+        window.onload = function() {
             init();
             
             const zone = document.getElementById('uploadZone');
             const input = document.getElementById('imageInput');
             const preview = document.getElementById('preview');
             
-            // Логика открытия окна выбора файла при клике на зону
-            zone.addEventListener('click', () => {
-                input.click();
-            });
+            if (zone && input) {
+                zone.onclick = function() {
+                    input.click();
+                };
+                
+                input.onchange = function(e) {
+                    if (input.files && input.files[0]) {
+                        preview.src = URL.createObjectURL(input.files[0]);
+                        preview.style.display = 'block';
+                    }
+                };
+            }
             
-            // Логика вывода превью выбранной картинки
-            input.addEventListener('change', (e) => {
-                if (e.target.files && e.target.files[0]) {
-                    preview.src = URL.createObjectURL(e.target.files[0]);
-                    preview.style.display = 'block';
-                }
-            });
-            
-            document.getElementById('submitBtn').addEventListener('click', sendPredict);
-        });
+            document.getElementById('submitBtn').onclick = sendPredict;
+        };
     </script>
 </head>
 <body>
@@ -106,7 +110,7 @@
         </div>
         
         <button id="submitBtn" disabled>Классифицировать</button>
-        <div id="result">Здесь появится результат анализа</div>
+        <div id="result">Здесь появится результат или лог ошибки</div>
     </div>
 
 </body>
