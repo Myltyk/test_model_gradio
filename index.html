@@ -25,7 +25,6 @@
         h2 { color: #1e293b; margin-top: 0; margin-bottom: 8px; }
         .subtitle { color: #64748b; font-size: 14px; margin-bottom: 20px; }
         
-        /* Зона загрузки файла */
         .upload-area { 
             border: 2px dashed #cbd5e1; 
             padding: 25px; 
@@ -84,7 +83,7 @@
         <div class="upload-area" id="uploadZone">
             <p id="uploadText">📸 Нажмите сюда для загрузки фото</p>
             <input type="file" id="imageInput" accept="image/*">
-            <img id="preview" alt="Превью выбранного изображения">
+            <img id="preview" alt="Превью">
         </div>
         
         <button id="submitBtn">Классифицировать</button>
@@ -92,8 +91,8 @@
     </div>
 
     <script>
-        // Фиксированная рабочая ссылка на ваш бэкенд Gradio
-        const GRADIO_URL = "https://d8090ba6c5d8d9c9ac.gradio.live"; 
+        // Ваша актуальная рабочая ссылка Gradio
+        const GRADIO_URL = "https://gradio.live"; 
 
         const zone = document.getElementById('uploadZone');
         const input = document.getElementById('imageInput');
@@ -102,70 +101,77 @@
         const submitBtn = document.getElementById('submitBtn');
         const resultDiv = document.getElementById('result');
 
-        let g4FileData = null; // Переменная для хранения правильной структуры файла Gradio
+        let selectedFile = null; // Храним чистый файл для FormData
 
-        // Клик по визуальной зоне вызывает скрытый системный инпут выбора файла
         zone.onclick = () => input.click();
 
-        // Срабатывает, когда пользователь выбрал файл на устройстве
         input.onchange = () => {
-            const file = input.files[0];
-            if (file) {
-                // Отображаем превью картинки на странице
-                preview.src = URL.createObjectURL(file);
+            if (input.files && input.files[0]) {
+                selectedFile = input.files[0];
+                preview.src = URL.createObjectURL(selectedFile);
                 preview.style.display = 'block';
                 uploadText.style.display = 'none';
-
-                // Переводим файл в Base64 (Data-URL) для отправки в JSON
-                const reader = new FileReader();
-                reader.onloadend = () => {
-                    // Конструируем внутреннюю структуру Gradio 4 для типа данных FileData
-                    g4FileData = {
-                        "data": reader.result,
-                        "name": file.name,
-                        "meta": { "_type": "gradio.FileData" }
-                    };
-                };
-                reader.readAsDataURL(file);
             }
         };
 
-        // Функция отправки запроса в API
         async function sendPredict() {
-            if (!g4FileData) {
+            if (!selectedFile) {
                 alert("Пожалуйста, сначала загрузите картинку!");
                 return;
             }
 
-            resultDiv.innerText = "🤖 Нейросеть обрабатывает изображение...";
+            resultDiv.innerText = "⏳ Шаг 1: Загрузка файла на сервер Gradio...";
             submitBtn.disabled = true;
 
             try {
-                // ШАГ 1: Посылаем POST-запрос для регистрации задачи в очереди Gradio
-                const response = await fetch(`${GRADIO_URL}/gradio_api/call/predict`, {
+                // --- ШАГ 1: Отправляем физический файл через multipart/form-data ---
+                const formData = new FormData();
+                formData.append('files', selectedFile);
+
+                const uploadResponse = await fetch(`${GRADIO_URL}/gradio_api/upload`, {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error(`Ошибка загрузки файла на сервер: ${uploadResponse.status}`);
+                }
+
+                const uploadResult = await uploadResponse.json();
+                // Сервер возвращает массив путей к файлам на диске, берем первый:
+                const serverFilePath = uploadResult[0]; 
+
+                resultDiv.innerText = "🤖 Шаг 2: Файл на сервере! Запуск классификации...";
+
+                // --- ШАГ 2: Передаем полученный путь в JSON-запросе ---
+                const predictResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        data: [ g4FileData ] // Ключ img в Gradio v4 передаётся как элемент массива data
+                        data: [
+                            {
+                                "path": serverFilePath,
+                                "meta": { "_type": "gradio.FileData" }
+                            }
+                        ]
                     })
                 });
 
-                if (!response.ok) {
-                    throw new Error(`Сервер ответил ошибкой: ${response.status}`);
+                if (!predictResponse.ok) {
+                    throw new Error(`Сервер отклонил запрос классификации: ${predictResponse.status}`);
                 }
 
-                const jsonResult = await response.json();
+                const jsonResult = await responseData = await predictResponse.json();
                 
-                // ШАГ 2: Если сервер выдал event_id задачи, запрашиваем поток с результатом
+                // ШАГ 3: Получаем результат из очереди ответов
                 if (jsonResult.event_id) {
-                    resultDiv.innerText = "Файл принят! Получение результата классификации...\n";
+                    resultDiv.innerText = "Файл успешно обработан! Получение ответа...\n";
                     
                     const streamResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict/${jsonResult.event_id}`);
                     const textData = await streamResponse.text();
                     
-                    // Парсим и очищаем полученный ответ
                     parseGradioResponse(textData);
                 } else {
                     resultDiv.innerText = "Ответ модели:\n" + JSON.stringify(jsonResult, null, 2);
@@ -173,36 +179,30 @@
 
             } catch (error) {
                 console.error(error);
-                resultDiv.innerText = "❌ Ошибка вызова API:\n" + error.message + 
-                "\n\nУбедитесь, что ваш Python-ноутбук запущен, и туннель gradio.live открыт.";
+                resultDiv.innerText = "❌ Ошибка выполнения API:\n" + error.message;
             } finally {
                 submitBtn.disabled = false;
             }
         }
 
-        // Функция для парсинга SSE-потока Gradio и извлечения чистого ответа нейросети
         function parseGradioResponse(rawText) {
             try {
                 const lines = rawText.split('\n');
                 for (let line of lines) {
-                    // Ищем строчку, содержащую полезные данные
                     if (line.startsWith('data: ')) {
                         const cleanJson = JSON.parse(line.replace('data: ', ''));
                         
-                        // Если в ответе пришёл статус ошибки
                         if (cleanJson.event === "error") {
-                            resultDiv.innerText = "❌ Ошибка на стороне модели Python:\n" + JSON.stringify(cleanJson.data, null, 2);
+                            resultDiv.innerText = "❌ Ошибка модели:\n" + JSON.stringify(cleanJson.data, null, 2);
                             return;
                         }
                         
-                        // Если это финальные данные вывода (массив с предсказанием)
                         if (cleanJson.event === "complete" && cleanJson.data) {
-                            resultDiv.innerText = "Результат нейросети:\n" + JSON.stringify(cleanJson.data[0], null, 2);
+                            resultDiv.innerText = "Результат нейросети:\n" + JSON.stringify(cleanJson.data, null, 2);
                             return;
                         }
                     }
                 }
-                // Если не удалось распарсить автоматически, выводим сырой текст
                 resultDiv.innerText = "Ответ модели:\n" + rawText;
             } catch (e) {
                 resultDiv.innerText = "Ответ модели:\n" + rawText;
