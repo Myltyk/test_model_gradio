@@ -91,7 +91,7 @@
     </div>
 
     <script>
-        // Ваша актуальная рабочая ссылка Gradio
+        // Ваша рабочая ссылка Gradio
         const GRADIO_URL = "https://gradio.live"; 
 
         const zone = document.getElementById('uploadZone');
@@ -101,21 +101,22 @@
         const submitBtn = document.getElementById('submitBtn');
         const resultDiv = document.getElementById('result');
 
-        let selectedFile = null; // Храним чистый файл для FormData
+        // Открытие выбора файла
+        zone.addEventListener('click', () => {
+            input.click();
+        });
 
-        zone.onclick = () => input.click();
-
-        input.onchange = () => {
+        // Отображение превью после выбора файла
+        input.addEventListener('change', () => {
             if (input.files && input.files[0]) {
-                selectedFile = input.files[0];
-                preview.src = URL.createObjectURL(selectedFile);
+                preview.src = URL.createObjectURL(input.files[0]);
                 preview.style.display = 'block';
                 uploadText.style.display = 'none';
             }
-        };
+        });
 
         async function sendPredict() {
-            if (!selectedFile) {
+            if (!input.files || input.files.length === 0) {
                 alert("Пожалуйста, сначала загрузите картинку!");
                 return;
             }
@@ -124,9 +125,9 @@
             submitBtn.disabled = true;
 
             try {
-                // --- ШАГ 1: Отправляем физический файл через multipart/form-data ---
+                // --- ШАГ 1: Отправка файла через FormData ---
                 const formData = new FormData();
-                formData.append('files', selectedFile);
+                formData.append('files', input.files[0]);
 
                 const uploadResponse = await fetch(`${GRADIO_URL}/gradio_api/upload`, {
                     method: 'POST',
@@ -138,12 +139,11 @@
                 }
 
                 const uploadResult = await uploadResponse.json();
-                // Сервер возвращает массив путей к файлам на диске, берем первый:
                 const serverFilePath = uploadResult[0]; 
 
                 resultDiv.innerText = "🤖 Шаг 2: Файл на сервере! Запуск классификации...";
 
-                // --- ШАГ 2: Передаем полученный путь в JSON-запросе ---
+                // --- ШАГ 2: Передача пути в JSON-запросе ---
                 const predictResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict`, {
                     method: 'POST',
                     headers: {
@@ -163,9 +163,10 @@
                     throw new Error(`Сервер отклонил запрос классификации: ${predictResponse.status}`);
                 }
 
-                const jsonResult = await responseData = await predictResponse.json();
+                // ИСПРАВЛЕНО: убрана двойная переменная из присвоения
+                const jsonResult = await predictResponse.json();
                 
-                // ШАГ 3: Получаем результат из очереди ответов
+                // ШАГ 3: Получение ответа из очереди задач
                 if (jsonResult.event_id) {
                     resultDiv.innerText = "Файл успешно обработан! Получение ответа...\n";
                     
