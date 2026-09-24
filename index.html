@@ -3,26 +3,173 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>AI Модель Классификации</title>
+    <title>Мой Кастомный Классификатор Изображений</title>
     <style>
-        html, body {
-            margin: 0;
-            padding: 0;
-            width: 100%;
-            height: 100%;
-            overflow: hidden;
+        /* Здесь вы можете полностью менять дизайн сайта (цвета, шрифты, отступы) */
+        body { 
+            font-family: 'Segoe UI', Arial, sans-serif; 
+            background-color: #f0f2f5; 
+            margin: 0; 
+            padding: 40px 20px; 
+            display: flex; 
+            justify-content: center; 
         }
-        iframe {
-            width: 100%;
-            height: 100%;
-            border: none;
+        .custom-app { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 16px; 
+            box-shadow: 0 10px 25px rgba(0,0,0,0.05); 
+            max-width: 500px; 
+            width: 100%; 
+            text-align: center; 
+        }
+        h2 { color: #1e293b; margin-top: 0; }
+        .status-badge { 
+            padding: 6px 12px; 
+            border-radius: 20px; 
+            font-size: 0.85em; 
+            font-weight: bold; 
+            display: inline-block; 
+            margin-bottom: 20px; 
+        }
+        .connecting { background: #fef3c7; color: #d97706; }
+        .connected { background: #dcfce7; color: #15803d; }
+        .error { background: #fee2e2; color: #b91c1c; }
+        
+        .upload-zone {
+            border: 2px dashed #cbd5e1;
+            padding: 30px;
+            border-radius: 12px;
+            cursor: pointer;
+            background: #f8fafc;
+            transition: all 0.2s;
+        }
+        .upload-zone:hover { border-color: #3b82f6; background: #eff6ff; }
+        #imageInput { display: none; }
+        
+        #preview { 
+            max-width: 100%; 
+            max-height: 250px; 
+            margin-top: 15px; 
+            border-radius: 8px; 
+            display: none; 
+        }
+        .btn-predict { 
+            background: #3b82f6; 
+            color: white; 
+            border: none; 
+            padding: 14px; 
+            border-radius: 8px; 
+            font-size: 1em; 
+            font-weight: bold; 
+            width: 100%; 
+            margin-top: 20px; 
+            cursor: pointer; 
+        }
+        .btn-predict:disabled { background: #cbd5e1; cursor: not-allowed; }
+        #result-box { 
+            margin-top: 20px; 
+            padding: 15px; 
+            border-radius: 8px; 
+            background: #f1f5f9; 
+            text-align: left; 
+            font-family: monospace; 
+            white-space: pre-wrap; 
         }
     </style>
+
+    <!-- Подключаем JS-клиент для работы с вашим API -->
+    <script type="module">
+        import { Client, handle_file } from "https://jsdelivr.net";
+
+        // !!! ВСТАВЬТЕ СЮДА ВАШУ АКТУАЛЬНУЮ ССЫЛКУ ИЗ GRADIO !!!
+        // (Она написана в самом низу вашего текущего сайта во вкладке "Использовать через API")
+        const GRADIO_URL = "https://d8090ba6c5d8d9c9ac.gradio.live/"; 
+        let client;
+
+        // 1. Подключение к API
+        async function init() {
+            const statusBadge = document.getElementById('status');
+            try {
+                client = await Client.connect(GRADIO_URL);
+                statusBadge.innerText = "Подключено к ИИ";
+                statusBadge.className = "status-badge connected";
+                document.getElementById('submitBtn').disabled = false;
+            } catch (e) {
+                console.error(e);
+                statusBadge.innerText = "Ошибка: ссылка Gradio истекла";
+                statusBadge.className = "status-badge error";
+            }
+        }
+
+        // 2. Отправка картинки в модель через API
+        async function sendPredict() {
+            const fileInput = document.getElementById('imageInput');
+            const resultBox = document.getElementById('result-box');
+            
+            if (fileInput.files.length === 0) {
+                alert("Сначала выберите картинку!");
+                return;
+            }
+
+            resultBox.innerText = "⏳ Нейросеть обрабатывает кадр...";
+            document.getElementById('submitBtn').disabled = true;
+
+            try {
+                const imageFile = handle_file(fileInput.files);
+
+                // Вызываем предсказание по правилам вашего API
+                const result = await client.predict("/predict", {
+                    img: imageFile,
+                });
+
+                // Выводим чистый ответ от вашей модели Fast.ai
+                resultBox.innerText = "Результат:\n" + JSON.stringify(result.data, null, 2);
+            } catch (error) {
+                console.error(error);
+                resultBox.innerText = "❌ Ошибка обработки API. Проверьте консоль.";
+            } finally {
+                document.getElementById('submitBtn').disabled = false;
+            }
+        }
+
+        // Логика отображения выбранной картинки
+        window.addEventListener('DOMContentLoaded', () => {
+            init();
+            
+            const zone = document.getElementById('uploadZone');
+            const input = document.getElementById('imageInput');
+            const preview = document.getElementById('preview');
+            
+            zone.addEventListener('click', () => input.click());
+            input.addEventListener('change', (e) => {
+                if(e.target.files[0]) {
+                    preview.src = URL.createObjectURL(e.target.files[0]);
+                    preview.style.display = 'block';
+                }
+            });
+
+            document.getElementById('submitBtn').addEventListener('click', sendPredict);
+        });
+    </script>
 </head>
 <body>
 
-    <!-- Ваша актуальная ссылка Gradio -->
-    <iframe src="https://d8090ba6c5d8d9c9ac.gradio.live"></iframe>
+    <div class="custom-app">
+        <h2>Кастомный ИИ-Сервис</h2>
+        <div id="status" class="status-badge connecting">Подключение к API...</div>
+        
+        <!-- Наша собственная зона загрузки картинок -->
+        <div class="upload-zone" id="uploadZone">
+            <p>📸 Кликните сюда, чтобы загрузить фото</p>
+            <input type="file" id="imageInput" accept="image/*">
+            <img id="preview" alt="Превью вашего фото">
+        </div>
+        
+        <button class="btn-predict" id="submitBtn" disabled>Запустить анализ</button>
+        
+        <div id="result-box">Здесь появится кастомный ответ модели...</div>
+    </div>
 
 </body>
 </html>
