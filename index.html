@@ -101,74 +101,67 @@
         const submitBtn = document.getElementById('submitBtn');
         const resultDiv = document.getElementById('result');
 
-        // Открытие выбора файла
+        let base64String = ""; // Переменная для хранения закодированного фото
+        let currentFileName = "";
+
         zone.addEventListener('click', () => {
             input.click();
         });
 
-        // Отображение превью после выбора файла
         input.addEventListener('change', () => {
-            if (input.files && input.files[0]) {
-                preview.src = URL.createObjectURL(input.files[0]);
+            const file = input.files[0];
+            if (file) {
+                currentFileName = file.name;
+                preview.src = URL.createObjectURL(file);
                 preview.style.display = 'block';
                 uploadText.style.display = 'none';
+
+                // Переводим файл в формат текстовой строки Base64
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    base64String = reader.result;
+                };
+                reader.readAsDataURL(file);
             }
         });
 
         async function sendPredict() {
-            if (!input.files || input.files.length === 0) {
+            if (!base64String) {
                 alert("Пожалуйста, сначала загрузите картинку!");
                 return;
             }
 
-            resultDiv.innerText = "⏳ Шаг 1: Загрузка файла на сервер Gradio...";
+            resultDiv.innerText = "🤖 Нейросеть обрабатывает изображение...";
             submitBtn.disabled = true;
 
             try {
-                // --- ШАГ 1: Отправка файла через FormData ---
-                const formData = new FormData();
-                formData.append('files', input.files[0]);
+                // Строим точную JSON-структуру FileData для обхода CORS
+                const fileDataObject = {
+                    "data": base64String,
+                    "name": currentFileName,
+                    "meta": { "_type": "gradio.FileData" }
+                };
 
-                const uploadResponse = await fetch(`${GRADIO_URL}/gradio_api/upload`, {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!uploadResponse.ok) {
-                    throw new Error(`Ошибка загрузки файла на сервер: ${uploadResponse.status}`);
-                }
-
-                const uploadResult = await uploadResponse.json();
-                const serverFilePath = uploadResult[0]; 
-
-                resultDiv.innerText = "🤖 Шаг 2: Файл на сервере! Запуск классификации...";
-
-                // --- ШАГ 2: Передача пути в JSON-запросе ---
-                const predictResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict`, {
+                // Отправляем POST запрос. Параметр называется img, как на вашем скриншоте документации
+                const response = await fetch(`${GRADIO_URL}/gradio_api/call/predict`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        data: [
-                            {
-                                "path": serverFilePath,
-                                "meta": { "_type": "gradio.FileData" }
-                            }
-                        ]
+                        data: [ fileDataObject ]
                     })
                 });
 
-                if (!predictResponse.ok) {
-                    throw new Error(`Сервер отклонил запрос классификации: ${predictResponse.status}`);
+                if (!response.ok) {
+                    throw new Error(`Сервер отклонил запрос: ${response.status}`);
                 }
 
-                // ИСПРАВЛЕНО: убрана двойная переменная из присвоения
-                const jsonResult = await predictResponse.json();
+                const jsonResult = await response.json();
                 
-                // ШАГ 3: Получение ответа из очереди задач
+                // Получение ответа из очереди задач Gradio 4
                 if (jsonResult.event_id) {
-                    resultDiv.innerText = "Файл успешно обработан! Получение ответа...\n";
+                    resultDiv.innerText = "Файл успешно передан! Получение ответа...\n";
                     
                     const streamResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict/${jsonResult.event_id}`);
                     const textData = await streamResponse.text();
