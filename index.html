@@ -5,32 +5,86 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>AI Классификатор Изображений</title>
     <style>
-        body { font-family: Arial, sans-serif; background: #f4f5f7; display: flex; justify-content: center; padding: 40px; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 450px; width: 100%; text-align: center; }
-        h2 { color: #1e293b; margin-top: 0; }
+        body { 
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            background: #f4f5f7; 
+            display: flex; 
+            justify-content: center; 
+            padding: 40px; 
+            margin: 0;
+        }
+        .card { 
+            background: white; 
+            padding: 30px; 
+            border-radius: 12px; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
+            max-width: 450px; 
+            width: 100%; 
+            text-align: center; 
+        }
+        h2 { color: #1e293b; margin-top: 0; margin-bottom: 8px; }
+        .subtitle { color: #64748b; font-size: 14px; margin-bottom: 20px; }
         
         /* Зона загрузки файла */
-        .upload-area { border: 2px dashed #cbd5e1; padding: 25px; border-radius: 8px; cursor: pointer; background: #f8fafc; min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 15px; transition: border 0.2s; }
-        .upload-area:hover { border-color: #007bff; background: #f0f7ff; }
+        .upload-area { 
+            border: 2px dashed #cbd5e1; 
+            padding: 25px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            background: #f8fafc; 
+            min-height: 140px; 
+            display: flex; 
+            flex-direction: column; 
+            align-items: center; 
+            justify-content: center; 
+            margin-bottom: 15px; 
+            transition: border-color 0.2s, background-color 0.2s; 
+        }
+        .upload-area:hover { border-color: #007bff; background-color: #f0f7ff; }
         #imageInput { display: none; }
         #preview { max-width: 100%; max-height: 200px; margin-top: 15px; border-radius: 6px; display: none; border: 1px solid #e2e8f0; }
         
-        button { background: #007bff; color: white; border: none; padding: 14px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; font-size: 16px; }
+        button { 
+            background: #007bff; 
+            color: white; 
+            border: none; 
+            padding: 14px; 
+            border-radius: 8px; 
+            cursor: pointer; 
+            width: 100%; 
+            font-weight: bold; 
+            font-size: 16px; 
+            transition: background 0.2s;
+        }
+        button:hover { background: #0056b3; }
         button:disabled { background: #cbd5e1; cursor: not-allowed; }
         
-        #result { margin-top: 20px; padding: 15px; background: #f1f5f9; border-radius: 8px; font-family: monospace; white-space: pre-wrap; text-align: left; max-height: 200px; overflow-y: auto; }
+        #result { 
+            margin-top: 20px; 
+            padding: 15px; 
+            background: #f1f5f9; 
+            border-radius: 8px; 
+            font-family: monospace; 
+            white-space: pre-wrap; 
+            text-align: left; 
+            max-height: 200px; 
+            overflow-y: auto; 
+            color: #334155;
+            font-size: 13px;
+            border: 1px solid #e2e8f0;
+        }
     </style>
 </head>
 <body>
 
     <div class="card">
         <h2>Мой AI Сервис</h2>
-        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Загрузите фото с устройства для отправки в модель через API</p>
+        <p class="subtitle">Загрузите фото с устройства для отправки в модель через API</p>
         
         <div class="upload-area" id="uploadZone">
             <p id="uploadText">📸 Нажмите сюда для загрузки фото</p>
             <input type="file" id="imageInput" accept="image/*">
-            <img id="preview" alt="Превью">
+            <img id="preview" alt="Превью выбранного изображения">
         </div>
         
         <button id="submitBtn">Классифицировать</button>
@@ -38,7 +92,7 @@
     </div>
 
     <script>
-        // Ваша рабочая и проверенная ссылка API
+        // Фиксированная рабочая ссылка на ваш бэкенд Gradio
         const GRADIO_URL = "https://d8090ba6c5d8d9c9ac.gradio.live"; 
 
         const zone = document.getElementById('uploadZone');
@@ -48,32 +102,37 @@
         const submitBtn = document.getElementById('submitBtn');
         const resultDiv = document.getElementById('result');
 
-        let base64Image = ""; // Переменная для хранения закодированного фото
+        let g4FileData = null; // Переменная для хранения правильной структуры файла Gradio
 
-        // Активация окна выбора файла при клике на зону
+        // Клик по визуальной зоне вызывает скрытый системный инпут выбора файла
         zone.onclick = () => input.click();
 
-        // Чтение файла и перевод его в формат URL (Base64) для API
+        // Срабатывает, когда пользователь выбрал файл на устройстве
         input.onchange = () => {
             const file = input.files[0];
             if (file) {
-                // Показываем превью
+                // Отображаем превью картинки на странице
                 preview.src = URL.createObjectURL(file);
                 preview.style.display = 'block';
                 uploadText.style.display = 'none';
 
-                // Конвертируем файл в Base64 строку для передачи через JSON
+                // Переводим файл в Base64 (Data-URL) для отправки в JSON
                 const reader = new FileReader();
                 reader.onloadend = () => {
-                    base64Image = reader.result; // Получаем готовую Data-URL строку
+                    // Конструируем внутреннюю структуру Gradio 4 для типа данных FileData
+                    g4FileData = {
+                        "data": reader.result,
+                        "name": file.name,
+                        "meta": { "_type": "gradio.FileData" }
+                    };
                 };
                 reader.readAsDataURL(file);
             }
         };
 
-        // Отправка запроса к API Gradio v2 без использования внешних библиотек
+        // Функция отправки запроса в API
         async function sendPredict() {
-            if (!base64Image) {
+            if (!g4FileData) {
                 alert("Пожалуйста, сначала загрузите картинку!");
                 return;
             }
@@ -82,32 +141,32 @@
             submitBtn.disabled = true;
 
             try {
-                // Выполняем точный POST запрос к API модели на основе вашей документации
+                // ШАГ 1: Посылаем POST-запрос для регистрации задачи в очереди Gradio
                 const response = await fetch(`${GRADIO_URL}/gradio_api/call/predict`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
-                        data: [ base64Image ] // Передаем изображение в виде текстовой Base64-строки
+                        data: [ g4FileData ] // Ключ img в Gradio v4 передаётся как элемент массива data
                     })
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Ошибка сервера: ${response.status}`);
+                    throw new Error(`Сервер ответил ошибкой: ${response.status}`);
                 }
 
                 const jsonResult = await response.json();
                 
-                // Проверяем, ушел ли запрос в очередь Gradio 4 (наличие event_id)
+                // ШАГ 2: Если сервер выдал event_id задачи, запрашиваем поток с результатом
                 if (jsonResult.event_id) {
-                    resultDiv.innerText = "Файл отправлен! Ожидание ответа из очереди...\n";
+                    resultDiv.innerText = "Файл принят! Получение результата классификации...\n";
                     
-                    // Запрашиваем финальный результат по полученному ID транзакции
                     const streamResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict/${jsonResult.event_id}`);
                     const textData = await streamResponse.text();
                     
-                    resultDiv.innerText = "Ответ модели:\n" + textData;
+                    // Парсим и очищаем полученный ответ
+                    parseGradioResponse(textData);
                 } else {
                     resultDiv.innerText = "Ответ модели:\n" + JSON.stringify(jsonResult, null, 2);
                 }
@@ -115,9 +174,38 @@
             } catch (error) {
                 console.error(error);
                 resultDiv.innerText = "❌ Ошибка вызова API:\n" + error.message + 
-                "\n\nУбедитесь, что туннель в Python активен и ссылка совпадает.";
+                "\n\nУбедитесь, что ваш Python-ноутбук запущен, и туннель gradio.live открыт.";
             } finally {
                 submitBtn.disabled = false;
+            }
+        }
+
+        // Функция для парсинга SSE-потока Gradio и извлечения чистого ответа нейросети
+        function parseGradioResponse(rawText) {
+            try {
+                const lines = rawText.split('\n');
+                for (let line of lines) {
+                    // Ищем строчку, содержащую полезные данные
+                    if (line.startsWith('data: ')) {
+                        const cleanJson = JSON.parse(line.replace('data: ', ''));
+                        
+                        // Если в ответе пришёл статус ошибки
+                        if (cleanJson.event === "error") {
+                            resultDiv.innerText = "❌ Ошибка на стороне модели Python:\n" + JSON.stringify(cleanJson.data, null, 2);
+                            return;
+                        }
+                        
+                        // Если это финальные данные вывода (массив с предсказанием)
+                        if (cleanJson.event === "complete" && cleanJson.data) {
+                            resultDiv.innerText = "Результат нейросети:\n" + JSON.stringify(cleanJson.data[0], null, 2);
+                            return;
+                        }
+                    }
+                }
+                // Если не удалось распарсить автоматически, выводим сырой текст
+                resultDiv.innerText = "Ответ модели:\n" + rawText;
+            } catch (e) {
+                resultDiv.innerText = "Ответ модели:\n" + rawText;
             }
         }
 
