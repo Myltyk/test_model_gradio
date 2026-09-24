@@ -23,7 +23,7 @@
     <script type="module">
         import { Client, handle_file } from "https://jsdelivr.net";
 
-        // Проверьте, совпадает ли эта ссылка с запущенной в данный момент в Python
+        // Проверьте, совпадает ли эта ссылка с запущенной в данный момент в Python ноутбуке
         const GRADIO_URL = "https://gradio.live"; 
         let client;
 
@@ -76,11 +76,14 @@
             const input = document.getElementById('imageInput');
             const preview = document.getElementById('preview');
             
-            // Исправленная логика клика и превью
-            zone.addEventListener('click', () => input.click());
+            // Логика открытия окна выбора файла при клике на зону
+            zone.addEventListener('click', () => {
+                input.click();
+            });
             
+            // Логика вывода превью выбранной картинки
             input.addEventListener('change', (e) => {
-                if(e.target.files && e.target.files[0]) {
+                if (e.target.files && e.target.files[0]) {
                     preview.src = URL.createObjectURL(e.target.files[0]);
                     preview.style.display = 'block';
                 }
@@ -96,7 +99,6 @@
         <h2>Мой AI Сервис</h2>
         <div id="status" class="status connecting">Подключение к API...</div>
         
-        <!-- Убедились, что ID совпадает со скриптом -->
         <div class="upload-area" id="uploadZone">
             <p>📁 Нажмите здесь для загрузки фото</p>
             <input type="file" id="imageInput" accept="image/*">
