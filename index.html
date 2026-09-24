@@ -3,122 +3,129 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ИИ Классификатор по URL</title>
+    <title>Кастомный ИИ Классификатор Файлов</title>
     <style>
         body { font-family: Arial, sans-serif; background: #f4f5f7; display: flex; justify-content: center; padding: 40px; }
-        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 500px; width: 100%; text-align: center; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 450px; width: 100%; text-align: center; }
         h2 { color: #1e293b; margin-top: 0; }
-        
-        /* Поле ввода URL */
-        .url-input {
-            width: 100%;
-            padding: 12px;
-            border: 2px solid #cbd5e1;
-            border-radius: 8px;
-            font-size: 14px;
-            box-sizing: border-box;
-            margin-bottom: 15px;
-        }
-        .url-input:focus { border-color: #3b82f6; outline: none; }
-        
-        #preview { max-width: 100%; max-height: 200px; margin: 10px 0; border-radius: 6px; display: none; border: 1px solid #e2e8f0; }
-        
+        .upload-area { border: 2px dashed #cbd5e1; padding: 25px; border-radius: 8px; cursor: pointer; background: #f8fafc; min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 15px; }
+        .upload-area:hover { border-color: #3b82f6; background: #eff6ff; }
+        #imageInput { display: none; }
+        #preview { max-width: 100%; max-height: 200px; margin-top: 15px; border-radius: 6px; display: none; border: 1px solid #e2e8f0; }
         button { background: #007bff; color: white; border: none; padding: 14px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; font-size: 16px; }
         button:disabled { background: #cbd5e1; cursor: not-allowed; }
-        
-        #result { margin-top: 20px; padding: 15px; background: #f1f5f9; border-radius: 8px; font-family: monospace; white-space: pre-wrap; text-align: left; max-height: 250px; overflow-y: auto; }
+        #result { margin-top: 20px; padding: 15px; background: #f1f5f9; border-radius: 8px; font-family: monospace; white-space: pre-wrap; text-align: left; max-height: 200px; overflow-y: auto; }
     </style>
 </head>
 <body>
 
     <div class="card">
-        <h2>Кастомный ИИ Сервис (По URL)</h2>
-        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Вставьте прямую ссылку на изображение из интернета для его классификации</p>
+        <h2>Мой AI Сервис</h2>
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Загрузите изображение с устройства для классификации через API</p>
         
-        <!-- Поле для ввода ссылки -->
-        <input type="text" id="imgUrl" class="url-input" placeholder="https://example.com">
+        <div class="upload-area" id="uploadZone">
+            <p id="uploadText">📁 Нажмите здесь для выбора фото</p>
+            <input type="file" id="imageInput" accept="image/*">
+            <img id="preview" alt="Превью">
+        </div>
         
-        <img id="preview" alt="Превью изображения">
-        
-        <button id="submitBtn">Классифицировать</button>
-        
+        <button id="submitBtn">Классифицировать файл</button>
         <div id="result">Результат анализа появится здесь...</div>
     </div>
 
     <script type="module">
-        // Используем стандартный нативный fetch вместо капризного клиента Gradio
-        // Это гарантирует, что интерфейс никогда не зависнет при загрузке страницы
-        const GRADIO_URL = "https://gradio.live"; 
+        // Ваша актуальная и проверенная ссылка
+        const GRADIO_URL = "https://d8090ba6c5d8d9c9ac.gradio.live"; 
 
-        const urlInput = document.getElementById('imgUrl');
+        const zone = document.getElementById('uploadZone');
+        const input = document.getElementById('imageInput');
         const preview = document.getElementById('preview');
+        const uploadText = document.getElementById('uploadText');
         const submitBtn = document.getElementById('submitBtn');
         const resultDiv = document.getElementById('result');
 
-        // Показ превью картинки при вводе URL
-        urlInput.addEventListener('input', () => {
-            const url = urlInput.value.trim();
-            if (url) {
-                preview.src = url;
-                preview.style.display = 'block';
-            } else {
-                preview.style.display = 'none';
-            }
-        });
+        zone.onclick = () => input.click();
 
-        // Прямой запрос к API Gradio v2 без сторонних библиотек
-        async function sendPredict() {
-            const url = urlInput.value.trim();
-            if (!url) {
-                alert("Пожалуйста, введите URL картинки!");
+        input.onchange = () => {
+            if (input.files && input.files[0]) {
+                preview.src = URL.createObjectURL(input.files[0]);
+                preview.style.display = 'block';
+                uploadText.style.display = 'none';
+            }
+        };
+
+        async function uploadAndPredict() {
+            if (!input.files || input.files.length === 0) {
+                alert("Пожалуйста, сначала выберите файл!");
                 return;
             }
 
-            resultDiv.innerText = "🤖 Нейросеть обрабатывает изображение по ссылке...";
+            resultDiv.innerText = "⏳ Шаг 1: Загрузка файла на сервер Gradio...";
             submitBtn.disabled = true;
 
             try {
-                // Точно симулируем JSON-запрос к вашей модели на основе вашего скриншота
-                const response = await fetch(`${GRADIO_URL}/gradio_api/call/predict`, {
+                // --- ШАГ 1: Загружаем файл на сервер через FormData ---
+                const formData = new FormData();
+                formData.append('files', input.files[0]);
+
+                const uploadResponse = await fetch(`${GRADIO_URL}/gradio_api/upload`, {
                     method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
+                    body: formData
+                });
+
+                if (!uploadResponse.ok) {
+                    throw new Error(`Ошибка загрузки файла на сервер: ${uploadResponse.status}`);
+                }
+
+                const uploadResult = await uploadResponse.json();
+                // Сервер возвращает массив путей. Берем первый элемент:
+                const serverFilePath = uploadResult[0]; 
+
+                resultDiv.innerText = "🤖 Шаг 2: Файл на сервере! Отправка в модель классификации...";
+
+                // --- ШАГ 2: Передаем путь к файлу в параметре img (строго по вашей документации) ---
+                const predictResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
-                        data: [ url ] // Передаем URL-строку напрямую в массив аргументов
+                        data: [
+                            {
+                                "path": serverFilePath,
+                                "meta": { "_type": "gradio.FileData" }
+                            }
+                        ]
                     })
                 });
 
-                if (!response.ok) {
-                    throw new Error(`Ошибка сервера: ${response.status}`);
+                if (!predictResponse.ok) {
+                    throw new Error(`Ошибка запроса предсказания: ${predictResponse.status}`);
                 }
 
-                const jsonResult = await response.json();
-                
-                // Для Gradio 4+ ответ часто возвращает event_id. Попробуем прочесть данные:
-                if (jsonResult.event_id) {
-                    resultDiv.innerText = "Запрос принят сервером!\nОжидание финального ответа...\n\n";
+                const predictResult = await predictResponse.json();
+
+                // Обработка очереди Gradio 4 (получение event_id)
+                if (predictResult.event_id) {
+                    resultDiv.innerText = "Запрос обрабатывается в очереди сервера...\n";
                     
-                    // Делаем второй обязательный GET запрос для получения результата (как написано у вас на скрине)
-                    const streamResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict/${jsonResult.event_id}`);
-                    const textData = await streamResponse.text();
+                    // Делаем финальный GET запрос для чтения ответа
+                    const finalResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict/${predictResult.event_id}`);
+                    const finalData = await finalResponse.text();
                     
-                    // Форматируем и выводим ответ
-                    resultDiv.innerText = "Ответ модели:\n" + textData;
+                    // Извлекаем и форматируем чистый текст ответа
+                    resultDiv.innerText = "Ответ модели:\n" + finalData;
                 } else {
-                    resultDiv.innerText = "Ответ модели:\n" + JSON.stringify(jsonResult, null, 2);
+                    resultDiv.innerText = "Ответ модели:\n" + JSON.stringify(predictResult, null, 2);
                 }
 
             } catch (error) {
                 console.error(error);
-                resultDiv.innerText = "❌ Ошибка вызова API:\n" + error.message + 
-                "\n\nУбедитесь, что ссылка .gradio.live активна в вашем Python блокноте.";
+                resultDiv.innerText = "❌ Ошибка вызова API:\n" + error.message;
             } finally {
                 submitBtn.disabled = false;
             }
         }
 
-        submitBtn.addEventListener('click', sendPredict);
+        submitBtn.onclick = uploadAndPredict;
     </script>
 
 </body>
