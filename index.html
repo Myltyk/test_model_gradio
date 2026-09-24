@@ -23,11 +23,12 @@
     <script type="module">
         import { Client, handle_file } from "https://jsdelivr.net";
 
-        // Проверьте, активна ли ещё эта ссылка в вашем Python-терминале/блокноте!
+        // ВНИМАНИЕ: Сюда вставьте АКТУАЛЬНУЮ ссылку из вашего запущенного Python-скрипта прямо сейчас
         const GRADIO_URL = "https://gradio.live"; 
         let client;
 
-        async function init() {
+        // Инициализация подключения (теперь работает независимо и не блокирует интерфейс)
+        async function initApi() {
             const statusDiv = document.getElementById('status');
             const resultDiv = document.getElementById('result');
             try {
@@ -36,10 +37,10 @@
                 statusDiv.className = "status connected";
                 document.getElementById('submitBtn').disabled = false;
             } catch (e) {
-                console.error(e);
+                console.error("Gradio Connection Error:", e);
                 statusDiv.innerText = "Ошибка подключения!";
                 statusDiv.className = "status error";
-                resultDiv.innerText = "Критическая ошибка инициализации: " + e.message + "\nВозможно, ссылка .gradio.live устарела или закрыта в Python.";
+                resultDiv.innerText = "Не удалось связаться с Python сервером.\nПричина: " + e.message + "\n\nПроверьте, запущена ли ячейка в Python и совпадает ли URL.";
             }
         }
 
@@ -48,7 +49,7 @@
             const resultDiv = document.getElementById('result');
             
             if (!fileInput.files || fileInput.files.length === 0) {
-                alert("Сначала выберите изображение!");
+                alert("Сначала выберите картинку!");
                 return;
             }
 
@@ -56,13 +57,10 @@
             document.getElementById('submitBtn').disabled = true;
 
             try {
-                // ИСПРАВЛЕНО: Передаем конкретный первый файл, а не весь список файлов
-                const imageFile = handle_file(fileInput.files[0]);
-
+                const imageFile = handle_file(fileInput.files);
                 const result = await client.predict("/predict", {
                     img: imageFile,
                 });
-
                 resultDiv.innerText = "Ответ модели:\n" + JSON.stringify(result.data, null, 2);
             } catch (error) {
                 console.error(error);
@@ -72,29 +70,30 @@
             }
         }
 
-        // Настройка событий вынесена отдельно для стабильности
-        window.onload = function() {
-            init();
-            
+        // Логику интерфейса привязываем СРАЗУ, не дожидаясь ответа сети
+        window.addEventListener('DOMContentLoaded', () => {
             const zone = document.getElementById('uploadZone');
             const input = document.getElementById('imageInput');
             const preview = document.getElementById('preview');
             
             if (zone && input) {
-                zone.onclick = function() {
-                    input.click();
-                };
+                zone.addEventListener('click', () => {
+                    input.click(); // Окно выбора файла откроется в любом случае!
+                });
                 
-                input.onchange = function(e) {
+                input.addEventListener('change', () => {
                     if (input.files && input.files[0]) {
                         preview.src = URL.createObjectURL(input.files[0]);
                         preview.style.display = 'block';
                     }
-                };
+                });
             }
             
-            document.getElementById('submitBtn').onclick = sendPredict;
-        };
+            document.getElementById('submitBtn').addEventListener('click', sendPredict);
+            
+            // Запускаем подключение к серверу отдельно
+            initApi();
+        });
     </script>
 </head>
 <body>
