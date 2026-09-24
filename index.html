@@ -3,55 +3,126 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Кастомный ИИ Классификатор</title>
+    <title>AI Классификатор Изображений</title>
     <style>
-        body { 
-            font-family: Arial, sans-serif; 
-            background: #f4f5f7; 
-            display: flex; 
-            justify-content: center; 
-            padding: 40px; 
-        }
-        .card { 
-            background: white; 
-            padding: 30px; 
-            border-radius: 12px; 
-            box-shadow: 0 4px 15px rgba(0,0,0,0.05); 
-            max-width: 500px; 
-            width: 100%; 
-            text-align: center; 
-        }
-        h2 { color: #1e293b; margin-top: 0; margin-bottom: 5px; }
-        .description { color: #64748b; font-size: 14px; margin-bottom: 25px; }
-
-        /* НАСТРОЙКА ВНЕШНЕГО ВИДА КОМПОНЕНТА GRADIO */
-        gradio-app {
-            border-radius: 8px;
-            overflow: hidden;
-        }
-
-        /* Хитрый трюк: скрываем встроенные футеры Gradio (ссылки, логотипы, лишний текст) */
-        gradio-app::part(footer) {
-            display: none !important;
-        }
-        gradio-app::part(logo) {
-            display: none !important;
-        }
+        body { font-family: Arial, sans-serif; background: #f4f5f7; display: flex; justify-content: center; padding: 40px; }
+        .card { background: white; padding: 30px; border-radius: 12px; box-shadow: 0 4px 15px rgba(0,0,0,0.05); max-width: 450px; width: 100%; text-align: center; }
+        h2 { color: #1e293b; margin-top: 0; }
+        
+        /* Зона загрузки файла */
+        .upload-area { border: 2px dashed #cbd5e1; padding: 25px; border-radius: 8px; cursor: pointer; background: #f8fafc; min-height: 120px; display: flex; flex-direction: column; align-items: center; justify-content: center; margin-bottom: 15px; transition: border 0.2s; }
+        .upload-area:hover { border-color: #007bff; background: #f0f7ff; }
+        #imageInput { display: none; }
+        #preview { max-width: 100%; max-height: 200px; margin-top: 15px; border-radius: 6px; display: none; border: 1px solid #e2e8f0; }
+        
+        button { background: #007bff; color: white; border: none; padding: 14px; border-radius: 8px; cursor: pointer; width: 100%; font-weight: bold; font-size: 16px; }
+        button:disabled { background: #cbd5e1; cursor: not-allowed; }
+        
+        #result { margin-top: 20px; padding: 15px; background: #f1f5f9; border-radius: 8px; font-family: monospace; white-space: pre-wrap; text-align: left; max-height: 200px; overflow-y: auto; }
     </style>
-
-    <!-- Подключаем официальный скрипт веб-компонентов Gradio -->
-    <script type="module" src="https://amazonaws.com"></script>
 </head>
 <body>
 
     <div class="card">
         <h2>Мой AI Сервис</h2>
-        <p class="description">Загрузите изображение с вашего устройства для мгновенной классификации</p>
+        <p style="color: #64748b; font-size: 14px; margin-bottom: 20px;">Загрузите фото с устройства для отправки в модель через API</p>
         
-        <!-- Встраиваем само приложение. Оно автоматически создаст кнопку загрузки файла и кнопку отправки -->
-        <!-- Атрибут src указывает на вашу точную рабочую ссылку -->
-        <gradio-app src="https://d8090ba6c5d8d9c9ac.gradio.live/"></gradio-app>
+        <div class="upload-area" id="uploadZone">
+            <p id="uploadText">📸 Нажмите сюда для загрузки фото</p>
+            <input type="file" id="imageInput" accept="image/*">
+            <img id="preview" alt="Превью">
+        </div>
+        
+        <button id="submitBtn">Классифицировать</button>
+        <div id="result">Результат анализа появится здесь...</div>
     </div>
+
+    <script>
+        // Ваша рабочая и проверенная ссылка API
+        const GRADIO_URL = "https://d8090ba6c5d8d9c9ac.gradio.live"; 
+
+        const zone = document.getElementById('uploadZone');
+        const input = document.getElementById('imageInput');
+        const preview = document.getElementById('preview');
+        const uploadText = document.getElementById('uploadText');
+        const submitBtn = document.getElementById('submitBtn');
+        const resultDiv = document.getElementById('result');
+
+        let base64Image = ""; // Переменная для хранения закодированного фото
+
+        // Активация окна выбора файла при клике на зону
+        zone.onclick = () => input.click();
+
+        // Чтение файла и перевод его в формат URL (Base64) для API
+        input.onchange = () => {
+            const file = input.files[0];
+            if (file) {
+                // Показываем превью
+                preview.src = URL.createObjectURL(file);
+                preview.style.display = 'block';
+                uploadText.style.display = 'none';
+
+                // Конвертируем файл в Base64 строку для передачи через JSON
+                const reader = new FileReader();
+                reader.onloadend = () => {
+                    base64Image = reader.result; // Получаем готовую Data-URL строку
+                };
+                reader.readAsDataURL(file);
+            }
+        };
+
+        // Отправка запроса к API Gradio v2 без использования внешних библиотек
+        async function sendPredict() {
+            if (!base64Image) {
+                alert("Пожалуйста, сначала загрузите картинку!");
+                return;
+            }
+
+            resultDiv.innerText = "🤖 Нейросеть обрабатывает изображение...";
+            submitBtn.disabled = true;
+
+            try {
+                // Выполняем точный POST запрос к API модели на основе вашей документации
+                const response = await fetch(`${GRADIO_URL}/gradio_api/call/predict`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        data: [ base64Image ] // Передаем изображение в виде текстовой Base64-строки
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Ошибка сервера: ${response.status}`);
+                }
+
+                const jsonResult = await response.json();
+                
+                // Проверяем, ушел ли запрос в очередь Gradio 4 (наличие event_id)
+                if (jsonResult.event_id) {
+                    resultDiv.innerText = "Файл отправлен! Ожидание ответа из очереди...\n";
+                    
+                    // Запрашиваем финальный результат по полученному ID транзакции
+                    const streamResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict/${jsonResult.event_id}`);
+                    const textData = await streamResponse.text();
+                    
+                    resultDiv.innerText = "Ответ модели:\n" + textData;
+                } else {
+                    resultDiv.innerText = "Ответ модели:\n" + JSON.stringify(jsonResult, null, 2);
+                }
+
+            } catch (error) {
+                console.error(error);
+                resultDiv.innerText = "❌ Ошибка вызова API:\n" + error.message + 
+                "\n\nУбедитесь, что туннель в Python активен и ссылка совпадает.";
+            } finally {
+                submitBtn.disabled = false;
+            }
+        }
+
+        submitBtn.onclick = sendPredict;
+    </script>
 
 </body>
 </html>
