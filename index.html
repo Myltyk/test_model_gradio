@@ -91,8 +91,8 @@
     </div>
 
     <script>
-        // Ваша рабочая ссылка Gradio
-        const GRADIO_URL = "https://gradio.live"; 
+        // Ваша новая актуальная ссылка на бэкенд Gradio
+        const GRADIO_URL = "https://0ed07a5abd943e22c4.gradio.live"; 
 
         const zone = document.getElementById('uploadZone');
         const input = document.getElementById('imageInput');
@@ -101,12 +101,10 @@
         const submitBtn = document.getElementById('submitBtn');
         const resultDiv = document.getElementById('result');
 
-        let base64String = ""; // Переменная для хранения закодированного фото
+        let base64String = ""; 
         let currentFileName = "";
 
-        zone.addEventListener('click', () => {
-            input.click();
-        });
+        zone.addEventListener('click', () => input.click());
 
         input.addEventListener('change', () => {
             const file = input.files[0];
@@ -116,7 +114,6 @@
                 preview.style.display = 'block';
                 uploadText.style.display = 'none';
 
-                // Переводим файл в формат текстовой строки Base64
                 const reader = new FileReader();
                 reader.onloadend = () => {
                     base64String = reader.result;
@@ -135,16 +132,16 @@
             submitBtn.disabled = true;
 
             try {
-                // Строим точную JSON-структуру FileData для обхода CORS
                 const fileDataObject = {
                     "data": base64String,
                     "name": currentFileName,
                     "meta": { "_type": "gradio.FileData" }
                 };
 
-                // Отправляем POST запрос. Параметр называется img, как на вашем скриншоте документации
+                // Отправляем первый POST-запрос для генерации задачи
                 const response = await fetch(`${GRADIO_URL}/gradio_api/call/predict`, {
                     method: 'POST',
+                    mode: 'cors',
                     headers: {
                         'Content-Type': 'application/json'
                     },
@@ -159,11 +156,13 @@
 
                 const jsonResult = await response.json();
                 
-                // Получение ответа из очереди задач Gradio 4
+                // Читаем поток событий для получения ответа
                 if (jsonResult.event_id) {
                     resultDiv.innerText = "Файл успешно передан! Получение ответа...\n";
                     
-                    const streamResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict/${jsonResult.event_id}`);
+                    const streamResponse = await fetch(`${GRADIO_URL}/gradio_api/call/predict/${jsonResult.event_id}`, {
+                        mode: 'cors'
+                    });
                     const textData = await streamResponse.text();
                     
                     parseGradioResponse(textData);
@@ -173,7 +172,8 @@
 
             } catch (error) {
                 console.error(error);
-                resultDiv.innerText = "❌ Ошибка выполнения API:\n" + error.message;
+                resultDiv.innerText = "❌ Ошибка выполнения API:\n" + error.message +
+                "\n\nЕсли это ошибка 'Failed to fetch', убедитесь, что в Python при старте прописано: demo.launch(share=True, strict_cors=False)";
             } finally {
                 submitBtn.disabled = false;
             }
